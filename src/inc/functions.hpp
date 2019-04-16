@@ -2,6 +2,11 @@
 #define FUNCTIONS_HPP
 #include "my_vector.hpp"
 
+
+enum class Color {RED, YELLOW, GREEN};
+enum class Lights {RED, YELLOW, GREEN};
+
+
 bool float_check(std::string inp)
 {
     bool isFloat = true;
