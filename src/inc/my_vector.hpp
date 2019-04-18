@@ -40,9 +40,11 @@ public:
     size_t size() const noexcept;
     size_t capacity() const;
     void clear();
+    bool empty() const;
 private:
     size_t size_;
     size_t reserved_;
+    bool isEmpty_;
     T*  elem_;
 };
 
@@ -53,6 +55,7 @@ template <typename T>
 my_vector<T>::my_vector()
     : size_{0}
     , reserved_{0}
+    , isEmpty_{true}
     , elem_{nullptr}
 {
 
@@ -62,6 +65,7 @@ template <typename T>
 my_vector<T>::my_vector(const std::initializer_list<T>& list)
     : size_{list.size()}
     , reserved_{1.5 * size_}
+    , isEmpty_{false}
     , elem_{new T[reserved_]}
 {
     std::copy(list.begin(), list.end(), elem_);
@@ -71,6 +75,7 @@ template <typename T>
 my_vector<T>::my_vector(size_t sz)
     : size_{sz}
     , reserved_{1.5 * size_}
+    , isEmpty_{false}
 {
     if(sz > 0)
     {
@@ -88,11 +93,8 @@ my_vector<T>::my_vector(const my_vector<T>& obj)
     size_ = obj.size();
     reserved_ = obj.capacity();
     elem_ = new T(reserved_);
-    for(int i = 0; i < reserved_; ++i)
-    {
-        elem_[i] = obj[i];
-    }
-    //std::copy(obj.begin(), obj.end(), elem_);
+    isEmpty_ = obj.empty();
+    std::copy(obj.begin(), obj.end(), elem_);
 }
 
 template <typename T>
@@ -100,14 +102,15 @@ my_vector<T>::my_vector(my_vector<T>&& obj)
 {
     size_t tmp_size = size_;
     size_t tmp_reserv = reserved_;
+    bool tmp_flag = isEmpty_;
     T tmp_elem[] = elem_;
     try
     {
         size_ = obj.size();
         reserved_ = obj.capacity();
         elem_ = &obj[0];
+        isEmpty_ = obj.empty();
         &obj[0] = nullptr;
-        obj.clear();
         delete [] tmp_elem;
     }
     catch(...)
@@ -115,6 +118,7 @@ my_vector<T>::my_vector(my_vector<T>&& obj)
         size_ = tmp_size;
         reserved_ = tmp_reserv;
         elem_ = tmp_elem;
+        isEmpty_ = tmp_flag;
     }
 }
 
@@ -143,15 +147,8 @@ my_vector<T> my_vector<T>::operator=(const my_vector<T>& obj)
     size_ = obj.size();
     reserved_ = obj.capacity();
     elem_ = new T(reserved_);
-    for(int i = 0; i < reserved_; ++i)
-    {
-        elem_[i] = obj[i];
-    }
-    for(int i = 0; i < reserved_; ++i)
-    {
-        elem_[i] = obj[i];
-    }
-    //std::copy(obj.begin(), obj.end(), elem_);
+    std::copy(obj.begin(), obj.end(), elem_);
+    isEmpty_ = obj.empty();
     return *this;
 }
 
@@ -160,14 +157,15 @@ my_vector<T> my_vector<T>::operator=(my_vector<T>&& obj)
 {
     size_t tmp_size = size_;
     size_t tmp_reserv = reserved_;
+    bool tmp_flag = isEmpty_;
     T* tmp_elem = elem_;
     try
     {
         size_ = obj.size();
         reserved_ = obj.capacity();
         elem_ = &obj[0];
+        isEmpty_ = obj.empty();
         &obj[0] = nullptr;
-        obj.clear();
         delete [] tmp_elem;
     }
     catch(...)
@@ -175,6 +173,7 @@ my_vector<T> my_vector<T>::operator=(my_vector<T>&& obj)
         size_ = tmp_size;
         reserved_ = tmp_reserv;
         elem_ = tmp_elem;
+        isEmpty_ = tmp_flag;
     }
     return *this;
 }
@@ -202,6 +201,19 @@ T& my_vector<T>::at(size_t index)
 }
 
 template <typename T>
+T& my_vector<T>::begin()
+{
+    return elem_[0];
+}
+
+template <typename T>
+T& my_vector<T>::end()
+{
+    return elem_[size_];
+}
+
+
+template <typename T>
 const T& my_vector<T>::front() const
 {
     return elem_[0u];
@@ -224,12 +236,26 @@ const T& my_vector<T>::at(size_t index) const
 }
 
 template <typename T>
+const T& my_vector<T>::begin() const
+{
+    return elem_[0];
+}
+
+template <typename T>
+const T& my_vector<T>::end() const
+{
+    return elem_[size_];
+}
+
+template <typename T>
 void my_vector<T>::clear()
 {
+    for (auto &var : elem_)
+    {
+        var = T();
+    }
     size_ = 0u;
-    reserved_ = 0u;
-    delete [] elem_;
-    elem_ = nullptr;
+    isEmpty_ = true;
 }
 
 template <typename T>
@@ -243,6 +269,10 @@ size_t my_vector<T>::capacity() const
 {
     return reserved_;
 }
-
+template <typename T>
+bool my_vector<T>::empty() const
+{
+    return isEmpty_;
+}
 
 #endif // MY_VECTOR_HPP
