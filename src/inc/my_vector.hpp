@@ -41,6 +41,13 @@ public:
     size_t capacity() const;
     void clear();
     bool empty() const;
+    void pop_back();
+    void push_back(const T& val);
+    void insert(size_t pos, T& elem);
+    void insert(size_t pos, T* begin, T* end);
+    void reserve(size_t capacity);
+    void shrink_to_fit();
+    void resize (size_t n);
 private:
     size_t size_;
     size_t reserved_;
@@ -80,9 +87,9 @@ my_vector<T>::my_vector(size_t sz)
     if(sz > 0)
     {
         elem_ = new T[reserved_];
-        for (auto &var : elem_)
+        for (size_t i = 0; i < size_; ++i)
         {
-            var = T();
+            elem_[i] = T();
         }
     }
 }
@@ -92,7 +99,7 @@ my_vector<T>::my_vector(const my_vector<T>& obj)
 {
     size_ = obj.size();
     reserved_ = obj.capacity();
-    elem_ = new T(reserved_);
+    elem_ = new T[reserved_];
     isEmpty_ = obj.empty();
     std::copy(obj.begin(), obj.end(), elem_);
 }
@@ -146,7 +153,7 @@ my_vector<T> my_vector<T>::operator=(const my_vector<T>& obj)
 {
     size_ = obj.size();
     reserved_ = obj.capacity();
-    elem_ = new T(reserved_);
+    elem_ = new T[reserved_];
     std::copy(obj.begin(), obj.end(), elem_);
     isEmpty_ = obj.empty();
     return *this;
@@ -275,4 +282,138 @@ bool my_vector<T>::empty() const
     return isEmpty_;
 }
 
+template <typename T>
+void my_vector<T>::pop_back()
+{
+    if(size_ > 0)
+    {
+        elem_[--size_] = T();
+    }
+}
+
+template <typename T>
+void my_vector<T>::push_back(const T& val)
+{
+    if(size_ < reserved_)
+    {
+        elem_[size_++] = val;
+    }
+    else
+    {
+        T tmp[] = elem_;
+        reserved_ *= 1.5;
+        elem_ = new T[reserved_];
+        std::copy(tmp[0], tmp[size_], elem_);
+        elem_[size_++] = val;
+        delete [] tmp;
+    }
+}
+
+template <typename T>
+void my_vector<T>::insert(size_t pos, T& elem)
+{
+    if(pos < size_)
+    {
+        if(size_ >= reserved_)
+        {
+           reserved_ = 1.5 * size_;
+        }
+
+        T tmp[] = elem_;
+        elem_ = new T[reserved_];
+
+        std::copy(tmp[0], tmp[pos], elem_);
+        elem_[pos] = elem;
+
+        for(size_t i = pos; i < size_ ;++i)
+        {
+            elem_[i+1] = tmp[i];
+        }
+        ++size_;
+    }
+    else
+    {
+        throw std::out_of_range("insertion pos is out of range");
+    }
+}
+
+template <typename T>
+void my_vector<T>::insert(size_t pos, T* begin, T* end)
+{
+    if(pos < size_)
+    {
+        size_t new_size = size_ + sizeof(begin)/sizeof(*begin); //???
+        size_t new_pos = pos;
+
+        if(new_size >= reserved_)
+        {
+           reserved_ = 1.5 * new_size ;
+        }
+
+        T tmp[] = elem_;
+        elem_ = new T[reserved_];
+        std::copy(tmp[0], tmp[pos], elem_);
+        for(T* iter = begin; iter != end; ++iter)
+        {
+            elem_[new_pos++] = *iter;
+        }
+
+        for(size_t i = pos; i < size_; ++i)
+        {
+            elem_[new_pos++] = tmp[i];
+        }
+        size_ = new_size;
+    }
+    else
+    {
+        throw std::out_of_range("insertion pos is out of range");
+    }
+}
+
+template <typename T>
+void my_vector<T>::reserve(size_t capacity)
+{
+    if(capacity > reserved_)
+    {
+        reserved_ = capacity;
+        T tmp[] = elem_;
+        elem_ = new T[reserved_];
+        std::copy(tmp[0], tmp[size_], elem_);
+        delete [] tmp;
+    }
+}
+
+template <typename T>
+void my_vector<T>::shrink_to_fit()
+{
+    if(size_ < reserved_)
+    {
+        reserved_ = size_;
+        T tmp[] = elem_;
+        elem_ = new T[reserved_];
+        std::copy(tmp[0], tmp[size_], elem_);
+        delete [] tmp;
+    }
+}
+
+template <typename T>
+void my_vector<T>::resize(size_t n)
+{
+    if(n < size_)
+    {
+        T tmp[] = elem_;
+        reserved_ = n;
+        elem_ = new T[reserved_];
+        std::copy(tmp[0], tmp[n], elem_);
+        delete [] tmp;
+    }
+    else if(n > reserved_)
+    {
+        T tmp[] = elem_;
+        reserved_ = n;
+        elem_ = new T[reserved_];
+        std::copy(tmp[0], tmp[n], elem_);
+        delete [] tmp;
+    }
+}
 #endif // MY_VECTOR_HPP

@@ -37,9 +37,9 @@ bool float_check(std::string inp)
 
 void read_show(int size)
 {
-    Float_vector vect(size);            // vector init
+    my_vector<float> vect(size);            // vector init
 
-    for(auto i = 0; i != vect.size(); ++i)
+    for(auto i = 0u; i != vect.size(); ++i)
     {
         std::string input;
         do{
