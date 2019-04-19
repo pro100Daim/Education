@@ -51,7 +51,6 @@ public:
 private:
     size_t size_;
     size_t reserved_;
-    bool isEmpty_;
     T*  elem_;
 };
 
@@ -62,7 +61,6 @@ template <typename T>
 my_vector<T>::my_vector()
     : size_{0}
     , reserved_{0}
-    , isEmpty_{true}
     , elem_{nullptr}
 {
 
@@ -71,9 +69,8 @@ my_vector<T>::my_vector()
 template <typename T>
 my_vector<T>::my_vector(const std::initializer_list<T>& list)
     : size_{list.size()}
-    , reserved_{1.5 * size_}
-    , isEmpty_{false}
-    , elem_{new T[reserved_]}
+    , reserved_{size_*3/2}
+    , elem_{new T[reserved_]} //replace with placement new logic
 {
     std::copy(list.begin(), list.end(), elem_);
 }
@@ -81,12 +78,11 @@ my_vector<T>::my_vector(const std::initializer_list<T>& list)
 template <typename T>
 my_vector<T>::my_vector(size_t sz)
     : size_{sz}
-    , reserved_{1.5 * size_}
-    , isEmpty_{false}
+    , reserved_{size_*3/2}
 {
     if(sz > 0)
     {
-        elem_ = new T[reserved_];
+        elem_ = new T[reserved_]; // replace with placement new logic
         for (size_t i = 0; i < size_; ++i)
         {
             elem_[i] = T();
@@ -99,8 +95,7 @@ my_vector<T>::my_vector(const my_vector<T>& obj)
 {
     size_ = obj.size();
     reserved_ = obj.capacity();
-    elem_ = new T[reserved_];
-    isEmpty_ = obj.empty();
+    elem_ = new T[reserved_]; // replace with placement new logic
     std::copy(obj.begin(), obj.end(), elem_);
 }
 
@@ -109,14 +104,12 @@ my_vector<T>::my_vector(my_vector<T>&& obj)
 {
     size_t tmp_size = size_;
     size_t tmp_reserv = reserved_;
-    bool tmp_flag = isEmpty_;
     T tmp_elem[] = elem_;
     try
     {
         size_ = obj.size();
         reserved_ = obj.capacity();
         elem_ = &obj[0];
-        isEmpty_ = obj.empty();
         &obj[0] = nullptr;
         delete [] tmp_elem;
     }
@@ -125,7 +118,6 @@ my_vector<T>::my_vector(my_vector<T>&& obj)
         size_ = tmp_size;
         reserved_ = tmp_reserv;
         elem_ = tmp_elem;
-        isEmpty_ = tmp_flag;
     }
 }
 
@@ -153,9 +145,8 @@ my_vector<T> my_vector<T>::operator=(const my_vector<T>& obj)
 {
     size_ = obj.size();
     reserved_ = obj.capacity();
-    elem_ = new T[reserved_];
+    elem_ = new T[reserved_]; // replace with placement new logic
     std::copy(obj.begin(), obj.end(), elem_);
-    isEmpty_ = obj.empty();
     return *this;
 }
 
@@ -164,14 +155,12 @@ my_vector<T> my_vector<T>::operator=(my_vector<T>&& obj)
 {
     size_t tmp_size = size_;
     size_t tmp_reserv = reserved_;
-    bool tmp_flag = isEmpty_;
     T* tmp_elem = elem_;
     try
     {
         size_ = obj.size();
         reserved_ = obj.capacity();
         elem_ = &obj[0];
-        isEmpty_ = obj.empty();
         &obj[0] = nullptr;
         delete [] tmp_elem;
     }
@@ -180,7 +169,6 @@ my_vector<T> my_vector<T>::operator=(my_vector<T>&& obj)
         size_ = tmp_size;
         reserved_ = tmp_reserv;
         elem_ = tmp_elem;
-        isEmpty_ = tmp_flag;
     }
     return *this;
 }
@@ -210,13 +198,13 @@ T& my_vector<T>::at(size_t index)
 template <typename T>
 T& my_vector<T>::begin()
 {
-    return elem_[0];
+    return elem_[0]; // to do; replace with iterator
 }
 
 template <typename T>
 T& my_vector<T>::end()
 {
-    return elem_[size_];
+    return elem_[size_]; // to do; replace with iterator
 }
 
 
@@ -243,13 +231,13 @@ const T& my_vector<T>::at(size_t index) const
 }
 
 template <typename T>
-const T& my_vector<T>::begin() const
+const T& my_vector<T>::begin() const // to do; replace with iterator
 {
     return elem_[0];
 }
 
 template <typename T>
-const T& my_vector<T>::end() const
+const T& my_vector<T>::end() const // to do; replace with iterator
 {
     return elem_[size_];
 }
@@ -259,10 +247,9 @@ void my_vector<T>::clear()
 {
     for (auto &var : elem_)
     {
-        var = T();
+        var.~T();
     }
     size_ = 0u;
-    isEmpty_ = true;
 }
 
 template <typename T>
@@ -279,7 +266,7 @@ size_t my_vector<T>::capacity() const
 template <typename T>
 bool my_vector<T>::empty() const
 {
-    return isEmpty_;
+    return (size_ > 0) ? false : true;
 }
 
 template <typename T>
@@ -300,10 +287,10 @@ void my_vector<T>::push_back(const T& val)
     }
     else
     {
-        T tmp[] = elem_;
-        reserved_ *= 1.5;
-        elem_ = new T[reserved_];
-        std::copy(tmp[0], tmp[size_], elem_);
+        T* tmp = elem_;
+        reserved_ = reserved_*2/3;
+        elem_ = new T[reserved_]; // replace with placement new logic
+        std::copy(tmp, tmp + size_, elem_);
         elem_[size_++] = val;
         delete [] tmp;
     }
@@ -316,13 +303,13 @@ void my_vector<T>::insert(size_t pos, T& elem)
     {
         if(size_ >= reserved_)
         {
-           reserved_ = 1.5 * size_;
+           reserved_ = size_*2/3;
         }
 
-        T tmp[] = elem_;
-        elem_ = new T[reserved_];
+        T* tmp = elem_;
+        elem_ = new T[reserved_]; // replace with placement new logic
 
-        std::copy(tmp[0], tmp[pos], elem_);
+        std::copy(tmp, tmp + pos, elem_);
         elem_[pos] = elem;
 
         for(size_t i = pos; i < size_ ;++i)
@@ -350,9 +337,9 @@ void my_vector<T>::insert(size_t pos, T* begin, T* end)
            reserved_ = 1.5 * new_size ;
         }
 
-        T tmp[] = elem_;
-        elem_ = new T[reserved_];
-        std::copy(tmp[0], tmp[pos], elem_);
+        T* tmp = elem_;
+        elem_ = new T[reserved_]; // replace with placement new logic
+        std::copy(tmp, tmp + pos, elem_);
         for(T* iter = begin; iter != end; ++iter)
         {
             elem_[new_pos++] = *iter;
@@ -376,9 +363,9 @@ void my_vector<T>::reserve(size_t capacity)
     if(capacity > reserved_)
     {
         reserved_ = capacity;
-        T tmp[] = elem_;
-        elem_ = new T[reserved_];
-        std::copy(tmp[0], tmp[size_], elem_);
+        T* tmp = elem_;
+        elem_ = new T[reserved_]; // replace with placement new logic
+        std::copy(tmp, tmp + size_, elem_);
         delete [] tmp;
     }
 }
@@ -389,9 +376,9 @@ void my_vector<T>::shrink_to_fit()
     if(size_ < reserved_)
     {
         reserved_ = size_;
-        T tmp[] = elem_;
-        elem_ = new T[reserved_];
-        std::copy(tmp[0], tmp[size_], elem_);
+        T* tmp = elem_;
+        elem_ = new T[reserved_]; // replace with placement new logic
+        std::copy(tmp, tmp + size_, elem_);
         delete [] tmp;
     }
 }
@@ -401,19 +388,23 @@ void my_vector<T>::resize(size_t n)
 {
     if(n < size_)
     {
-        T tmp[] = elem_;
+        T* tmp = elem_;
         reserved_ = n;
-        elem_ = new T[reserved_];
-        std::copy(tmp[0], tmp[n], elem_);
+        elem_ = new T[reserved_]; // replace with placement new logic
+        std::copy(tmp, tmp + n, elem_);
         delete [] tmp;
     }
     else if(n > reserved_)
     {
-        T tmp[] = elem_;
+        T* tmp = elem_;
         reserved_ = n;
-        elem_ = new T[reserved_];
-        std::copy(tmp[0], tmp[n], elem_);
+        elem_ = new T[reserved_]; // replace with placement new logic // replace with placement new logic
+        std::copy(tmp, tmp + n, elem_);
         delete [] tmp;
     }
+    // to do:  complete implementation
+
 }
+
+//to do; implace back
 #endif // MY_VECTOR_HPP
