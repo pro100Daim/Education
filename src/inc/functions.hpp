@@ -35,7 +35,7 @@ bool float_check(std::string inp)
 }
 
 
-void read_show(int size)
+void read_show(unsigned size)
 {
     my_vector<float> vect(size);            // vector init
 
@@ -51,10 +51,10 @@ void read_show(int size)
         }
         while(!float_check(input));
 
-        vect[i] = strtof(input.c_str(), 0);                 // read into storage
+        vect[i] = strtof(input.c_str(), nullptr);                 // read into storage
     }
 
-    for(auto j = 0; j != vect.size(); ++j)
+    for(auto j = 0u; j != vect.size(); ++j)
     {
         std::cout << vect[j] << std::endl;
     }
