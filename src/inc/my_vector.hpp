@@ -43,8 +43,11 @@ public:
     bool empty() const;
     void pop_back();
     void push_back(const T& val);
+    void push_back(T&& val);
     void insert(size_t pos, T& elem);
     void insert(size_t pos, T* begin, T* end);
+    void emplace(size_t pos, T&& elem);
+    void emplace_back(T&& val);
     void reserve(size_t capacity);
     void shrink_to_fit();
     void resize (size_t n);
@@ -52,6 +55,7 @@ private:
     size_t size_;
     size_t reserved_;
     T*  elem_;
+    //typename std::aligned_storage<sizeof(T), alignof(T)>::type* data;
 };
 
 
@@ -69,8 +73,9 @@ my_vector<T>::my_vector()
 template <typename T>
 my_vector<T>::my_vector(const std::initializer_list<T>& list)
     : size_{list.size()}
-    , reserved_{size_*3/2}
-    , elem_{new T[reserved_]} //replace with placement new logic
+    , reserved_{size_*2}
+    , elem_{malloc(sizeof (T)*reserved_)}
+    //, data{new typename std::aligned_storage<sizeof(T), alignof(T)>::type[reserved_]}
 {
     std::copy(list.begin(), list.end(), elem_);
 }
@@ -78,15 +83,12 @@ my_vector<T>::my_vector(const std::initializer_list<T>& list)
 template <typename T>
 my_vector<T>::my_vector(size_t sz)
     : size_{sz}
-    , reserved_{size_*3/2}
+    , reserved_{size_*2}
+    , elem_{malloc(sizeof (T)*reserved_)}
 {
     if(sz > 0)
     {
-        elem_ = new T[reserved_]; // replace with placement new logic
-        for (size_t i = 0; i < size_; ++i)
-        {
-            elem_[i] = T();
-        }
+        new (elem_) T[size_];
     }
 }
 
@@ -95,7 +97,7 @@ my_vector<T>::my_vector(const my_vector<T>& obj)
 {
     size_ = obj.size();
     reserved_ = obj.capacity();
-    elem_ = new T[reserved_]; // replace with placement new logic
+    elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
     std::copy(obj.begin(), obj.end(), elem_);
 }
 
@@ -104,7 +106,7 @@ my_vector<T>::my_vector(my_vector<T>&& obj)
 {
     size_t tmp_size = size_;
     size_t tmp_reserv = reserved_;
-    T tmp_elem[] = elem_;
+    T* tmp_elem = elem_;
     try
     {
         size_ = obj.size();
@@ -145,7 +147,7 @@ my_vector<T> my_vector<T>::operator=(const my_vector<T>& obj)
 {
     size_ = obj.size();
     reserved_ = obj.capacity();
-    elem_ = new T[reserved_]; // replace with placement new logic
+    elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
     std::copy(obj.begin(), obj.end(), elem_);
     return *this;
 }
@@ -245,9 +247,9 @@ const T& my_vector<T>::end() const // to do; replace with iterator
 template <typename T>
 void my_vector<T>::clear()
 {
-    for (auto &var : elem_)
+    for (T* iter = elem_; iter != elem_+size_; ++iter)
     {
-        var.~T();
+        iter->~T();
     }
     size_ = 0u;
 }
@@ -274,7 +276,7 @@ void my_vector<T>::pop_back()
 {
     if(size_ > 0)
     {
-        elem_[--size_] = T();
+        elem_[--size_].~T();
     }
 }
 
@@ -283,15 +285,35 @@ void my_vector<T>::push_back(const T& val)
 {
     if(size_ < reserved_)
     {
-        elem_[size_++] = val;
+        new (elem_+size_) T(val);
+        ++size_;
     }
     else
     {
         T* tmp = elem_;
-        reserved_ = reserved_*2/3;
-        elem_ = new T[reserved_]; // replace with placement new logic
+        reserved_ = reserved_*2;
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
         std::copy(tmp, tmp + size_, elem_);
-        elem_[size_++] = val;
+        new (elem_+size_) T(val);
+        delete [] tmp;
+    }
+}
+
+template <typename T>
+void my_vector<T>::push_back(T&& val)
+{
+    if(size_ < reserved_)
+    {
+        new (elem_+size_) T(std::forward<T>(val)); // ??? из lvalue делаю rvalue для инициализации конструктором перемещения
+        ++size_;
+    }
+    else
+    {
+        T* tmp = elem_;
+        reserved_ = reserved_*2;
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
+        std::copy(tmp, tmp + size_, elem_);
+        new (elem_+size_) T(std::forward<T>(val));
         delete [] tmp;
     }
 }
@@ -303,19 +325,15 @@ void my_vector<T>::insert(size_t pos, T& elem)
     {
         if(size_ >= reserved_)
         {
-           reserved_ = size_*2/3;
+           reserved_ = size_*2;
         }
 
         T* tmp = elem_;
-        elem_ = new T[reserved_]; // replace with placement new logic
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
 
         std::copy(tmp, tmp + pos, elem_);
-        elem_[pos] = elem;
-
-        for(size_t i = pos; i < size_ ;++i)
-        {
-            elem_[i+1] = tmp[i];
-        }
+        new (elem_+pos) T(elem);
+        std::copy(tmp + pos, tmp + size_, elem_ + pos + 1);
         ++size_;
     }
     else
@@ -329,31 +347,67 @@ void my_vector<T>::insert(size_t pos, T* begin, T* end)
 {
     if(pos < size_)
     {
-        size_t new_size = size_ + sizeof(begin)/sizeof(*begin); //???
-        size_t new_pos = pos;
+        size_t insert_size = end - begin;
+        size_t new_size = size_ + insert_size;
 
         if(new_size >= reserved_)
         {
-           reserved_ = 1.5 * new_size ;
+           reserved_ = 2 * (size_ + insert_size) ;
         }
 
         T* tmp = elem_;
-        elem_ = new T[reserved_]; // replace with placement new logic
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
         std::copy(tmp, tmp + pos, elem_);
-        for(T* iter = begin; iter != end; ++iter)
-        {
-            elem_[new_pos++] = *iter;
-        }
-
-        for(size_t i = pos; i < size_; ++i)
-        {
-            elem_[new_pos++] = tmp[i];
-        }
+        std::copy(begin, end, elem_ + pos);
+        std::copy(tmp + pos, tmp + size_, elem_ + pos + insert_size);
         size_ = new_size;
     }
     else
     {
         throw std::out_of_range("insertion pos is out of range");
+    }
+}
+
+template <typename T>
+void my_vector<T>::emplace(size_t pos, T&& elem)
+{
+    if(pos < size_)
+    {
+        if(size_ >= reserved_)
+        {
+           reserved_ = size_*2;
+        }
+
+        T* tmp = elem_;
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
+
+        std::copy(tmp, tmp + pos, elem_);
+        new (elem_+pos) T(std::forward<T>(elem)); // ??? из lvalue делаю rvalue для инициализации конструктором перемещения
+        std::copy(tmp + pos, tmp + size_, elem_ + pos + 1);
+        ++size_;
+    }
+    else
+    {
+        throw std::out_of_range("insertion pos is out of range");
+    }
+}
+
+template <typename T>
+void my_vector<T>::emplace_back(T&& val)
+{
+    if(size_ < reserved_)
+    {
+        new (elem_+size_) T(std::forward<T>(val)); // ??? из lvalue делаю rvalue для инициализации конструктором перемещения
+        ++size_;
+    }
+    else
+    {
+        T* tmp = elem_;
+        reserved_ = reserved_*2;
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
+        std::copy(tmp, tmp + size_, elem_);
+        new (elem_+size_) T(std::forward<T>(val));
+        delete [] tmp;
     }
 }
 
@@ -364,7 +418,7 @@ void my_vector<T>::reserve(size_t capacity)
     {
         reserved_ = capacity;
         T* tmp = elem_;
-        elem_ = new T[reserved_]; // replace with placement new logic
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
         std::copy(tmp, tmp + size_, elem_);
         delete [] tmp;
     }
@@ -377,7 +431,7 @@ void my_vector<T>::shrink_to_fit()
     {
         reserved_ = size_;
         T* tmp = elem_;
-        elem_ = new T[reserved_]; // replace with placement new logic
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
         std::copy(tmp, tmp + size_, elem_);
         delete [] tmp;
     }
@@ -388,23 +442,24 @@ void my_vector<T>::resize(size_t n)
 {
     if(n < size_)
     {
-        T* tmp = elem_;
-        reserved_ = n;
-        elem_ = new T[reserved_]; // replace with placement new logic
-        std::copy(tmp, tmp + n, elem_);
-        delete [] tmp;
+        for(T* iter = elem_ + n; iter != elem_+size_; ++iter )
+        {
+            iter->~T();
+        }
     }
     else if(n > reserved_)
     {
         T* tmp = elem_;
-        reserved_ = n;
-        elem_ = new T[reserved_]; // replace with placement new logic // replace with placement new logic
-        std::copy(tmp, tmp + n, elem_);
+        reserved_ = 2 * n;
+        elem_ = malloc(sizeof (T)*reserved_); //std::aligned_storage need to use
+        std::copy(tmp, tmp + size_, elem_);
+        new (elem_ + size_) T[n-size_];
         delete [] tmp;
     }
-    // to do:  complete implementation
-
+    else
+    {
+        new (elem_ + size_) T[n-size_];
+    }
+    size_ = n;
 }
-
-//to do; implace back
 #endif // MY_VECTOR_HPP
