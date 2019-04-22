@@ -60,6 +60,7 @@ private:
     void move_vec(my_vector<T>&& obj);
     void resize_storage(const size_t val);
     void release_storage(storage_t* begin, storage_t* end);
+    void copy_storage(const storage_t* begin, const storage_t* end,const storage_t* destination);
 
     void reset_fields(const size_t& sz,const size_t& cap,const storage_t* strg, my_vector<T>& obj);
 
@@ -94,7 +95,7 @@ my_vector<T>::my_vector(const std::initializer_list<T>& list)
 template <typename T>
 my_vector<T>::my_vector(size_t sz)
     : size_{sz}
-    , reserved_{size_*2}
+    , reserved_{size_*2u}
     , elem_{new storage_t[reserved_]}
 {
     if(sz > 0)
@@ -119,6 +120,7 @@ template <typename T>
 my_vector<T>::~my_vector()
 {
     release_storage(elem_, elem_+size_);
+    delete []elem_;
     elem_ = nullptr;
     size_ = 0u;
     reserved_ = 0u;
@@ -127,7 +129,7 @@ my_vector<T>::~my_vector()
 template <typename T>
 T& my_vector<T>::operator[](size_t i)
 {
-    return reinterpret_cast<T&>(elem_[i]); // Что то ттут не так.
+    return reinterpret_cast<T&>(elem_[i]);
 }
 
 template <typename T>
@@ -159,7 +161,7 @@ T& my_vector<T>::front()
 template <typename T>
 T& my_vector<T>::back()
 {
-    return reinterpret_cast<T&>(elem_[size_-1]);
+    return reinterpret_cast<T&>(elem_[size_-1u]);
 }
 
 template <typename T>
@@ -215,7 +217,7 @@ const T& my_vector<T>::begin() const // to do; replace with iterator
 template <typename T>
 const T& my_vector<T>::end() const // to do; replace with iterator
 {
-    return *reinterpret_cast<const T&>(elem_[size_]);
+    return reinterpret_cast<const T&>(elem_[size_]);
 }
 
 template <typename T>
@@ -242,13 +244,13 @@ size_t my_vector<T>::capacity() const noexcept
 template <typename T>
 bool my_vector<T>::empty() const noexcept
 {
-    return (size_ == 0);
+    return (size_ == 0u);
 }
 
 template <typename T>
 void my_vector<T>::pop_back()
 {
-    reinterpret_cast<T&>(elem_[--size_]).~T();
+    reinterpret_cast<T*>(&elem_[--size_])->~T();
 }
 
 template <typename T>
@@ -256,7 +258,7 @@ void my_vector<T>::push_back(const T& val)
 {
     if(size_ >= reserved_)
     {
-        resize_storage(2*size_);
+        resize_storage(2u*size_);
     }
     new (elem_+size_) T(val);
     ++size_;
@@ -267,7 +269,7 @@ void my_vector<T>::push_back(T&& val)
 {
     if(size_ >= reserved_)
     {
-        resize_storage(2*size_);
+        resize_storage(2u*size_);
     }
     new (elem_+size_) T(std::forward<T>(val));
     ++size_;
@@ -280,15 +282,16 @@ void my_vector<T>::insert(size_t pos, T& elem)
     {
         if(size_ == reserved_)
         {
-           reserved_ = reserved_*2;
+           reserved_ = reserved_*2u;
         }
 
         storage_t* tmp = elem_;
         elem_ = new storage_t[reserved_];
-        std::copy(tmp, tmp + pos, elem_);
+        copy_storage(tmp, tmp + pos, elem_);
         new (elem_+pos) T(elem);
-        std::copy(tmp + pos, tmp + size_, elem_ + pos + 1);
+        copy_storage(tmp + pos, tmp + size_, elem_ + pos + 1);
         release_storage(tmp, tmp+size_);
+        delete [] tmp;
         ++size_;
     }
     else
@@ -307,16 +310,17 @@ void my_vector<T>::insert(size_t pos, T* begin, T* end)
 
         if(new_size >= reserved_)
         {
-           reserved_ = 2 * (size_ + insert_size) ;
+           reserved_ = 2u * (size_ + insert_size) ;
         }
 
         storage_t* tmp = elem_;
         elem_ = new storage_t[reserved_];
-        std::copy(tmp, tmp + pos, elem_);
-        std::copy(begin, end, elem_ + pos);
-        std::copy(tmp + pos, tmp + size_, elem_ + pos + insert_size);
+        copy_storage(tmp, tmp + pos, elem_);
+        copy_storage(begin, end, elem_ + pos);
+        copy_storage(tmp + pos, tmp + size_, elem_ + pos + insert_size);
         size_ = new_size;
         release_storage(tmp, tmp+size_);
+        delete [] tmp;
     }
     else
     {
@@ -332,16 +336,16 @@ void my_vector<T>::emplace(size_t pos, Args&&... val)
     {
         if(size_ == reserved_)
         {
-           reserved_ = size_*2;
+           reserved_ = size_*2u;
         }
 
         storage_t* tmp = elem_;
         elem_ = new storage_t[reserved_];
-
-        std::copy(tmp, tmp + pos, elem_);
+        copy_storage(tmp, tmp + pos, elem_);
         new (elem_+pos) T(std::forward<Args>(val)...);
-        std::copy(tmp + pos, tmp + size_, elem_ + pos + 1);
+        copy_storage(tmp + pos, tmp + size_, elem_ + pos + 1);
         release_storage(tmp, tmp+size_);
+        delete [] tmp;
         ++size_;
     }
     else
@@ -356,7 +360,7 @@ void my_vector<T>::emplace_back(Args&&... val)
 {
     if(size_ >= reserved_)
     {
-        resize_storage(2*size_);
+        resize_storage(2u*size_);
     }
     new (elem_+size_) T(std::forward<Args>(val)...);
     ++size_;
@@ -385,16 +389,13 @@ void my_vector<T>::resize(size_t n)
 {
     if(n < size_)
     {
-        for(storage_t* iter = elem_ + n; iter != elem_+size_; ++iter )
-        {
-            reinterpret_cast<const T*>(iter)->~T();
-        }
+        release_storage(elem_ + n, elem_+size_);
     }
     else
     {
         if(n > reserved_)
         {
-            resize_storage(2*n);
+            resize_storage(2u*n);
         }
         new (elem_ + size_) T[n-size_];
     }
@@ -407,7 +408,7 @@ void my_vector<T>::copy_vec(const my_vector<T>& obj)
     size_ = obj.size();
     reserved_ = obj.capacity();
     elem_ = new storage_t[reserved_];
-    std::copy(obj.begin(), obj.end(), elem_);
+    copy_storage(obj.begin(), obj.end(), elem_);
 }
 
 template <typename T>
@@ -420,7 +421,7 @@ void my_vector<T>::move_vec(my_vector<T>&& obj)
     {
         size_ = obj.size();
         reserved_ = obj.capacity();
-        elem_ = &obj[0];
+        elem_ = &obj[0u];
 
         reset_fields(0u, 0u, nullptr, obj);
         release_storage(tmp_storage, tmp_storage+tmp_size);
@@ -438,8 +439,9 @@ void my_vector<T>::resize_storage(size_t val)
     storage_t* tmp = elem_;
     reserved_ = val;
     elem_ = new storage_t[reserved_];
-    std::copy(tmp, tmp + size_, elem_);
+    copy_storage(tmp, tmp + size_, elem_);
     release_storage(tmp, tmp+size_);
+    delete []tmp;
 }
 
 template <typename T>
@@ -447,9 +449,8 @@ void my_vector<T>::release_storage(storage_t* begin, storage_t* end)
 {
     for (storage_t* iter = begin; iter != end; ++iter)
     {
-        reinterpret_cast<const T*>(iter)->~T();
+        reinterpret_cast<T*>(iter)->~T();
     }
-    delete[] begin;
 }
 
 template <typename T>
@@ -458,5 +459,14 @@ void my_vector<T>::reset_fields(const size_t& sz,const size_t& cap,const storage
     obj.size_ = sz;
     obj.reserved_= cap;
     obj.elem_ = strg;
+}
+
+template <typename T>
+void my_vector<T>::copy_storage(const storage_t* begin, const storage_t* end,const storage_t* destination)
+{
+    for (storage_t* iter = begin; iter != end; ++iter, ++destination)
+    {
+        new (destination) T(std::forward<T>(reinterpret_cast<T&>(*iter)));
+    }
 }
 #endif // MY_VECTOR_HPP
